@@ -7,7 +7,7 @@ import (
 )
 
 // Change to true if needed.
-var taskWithAsteriskIsCompleted = false
+var taskWithAsteriskIsCompleted = true
 
 var text = `Как видите, он  спускается  по  лестнице  вслед  за  своим
 	другом   Кристофером   Робином,   головой   вниз,  пересчитывая
@@ -77,6 +77,59 @@ func TestTop10(t *testing.T) {
 				"то",        // 4
 			}
 			require.Equal(t, expected, Top10(text))
+		}
+	})
+
+	t.Run("case sensitive test", func(t *testing.T) {
+		if taskWithAsteriskIsCompleted {
+			expected := []string{
+				"нога",
+			}
+			got := Top10("Нога нога")
+			require.Equal(t, expected, got)
+		}
+	})
+
+	t.Run("punctuation test", func(t *testing.T) {
+		if taskWithAsteriskIsCompleted {
+			expected := []string{
+				"нога",
+			}
+			got := Top10("нога! нога нога, 'нога'")
+			require.Equal(t, expected, got)
+		}
+	})
+
+	t.Run("hyphen test", func(t *testing.T) {
+		if taskWithAsteriskIsCompleted {
+			expected := []string{
+				"какой-то",
+				"какойто",
+			}
+			got := Top10("какой-то какойто")
+			require.Equal(t, expected, got)
+		}
+	})
+
+	t.Run("middle test", func(t *testing.T) {
+		if taskWithAsteriskIsCompleted {
+			expected := []string{
+				"dog,cat",
+				"dog...cat",
+				"dogcat",
+			}
+			got := Top10("dog,cat dog...cat dogcat")
+			require.Equal(t, expected, got)
+		}
+	})
+
+	t.Run("hyphen word test", func(t *testing.T) {
+		if taskWithAsteriskIsCompleted {
+			expected := []string{
+				"-------",
+			}
+			got := Top10("------- -")
+			require.Equal(t, expected, got)
 		}
 	})
 }
