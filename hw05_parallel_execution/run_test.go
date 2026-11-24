@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -66,5 +67,68 @@ func TestRun(t *testing.T) {
 
 		require.Equal(t, int32(tasksCount), runTasksCount, "not all tasks were completed")
 		require.LessOrEqual(t, int64(elapsedTime), int64(sumTime/2), "tasks were run sequentially?")
+	})
+
+	t.Run("tasks run concurrently", func(t *testing.T) {
+		tasksCount := 50
+		workersCount := 5
+		maxErrorsCount := 1
+
+		var (
+			runningTasks  int32
+			runTasksCount int32
+		)
+
+		blocking := make(chan struct{})
+		var once sync.Once
+		unblocking := func() { once.Do(func() { close(blocking) }) }
+		defer unblocking()
+
+		tasks := make([]Task, 0, tasksCount)
+		for i := 0; i < tasksCount; i++ {
+			tasks = append(tasks, func() error {
+				atomic.AddInt32(&runningTasks, 1)
+				<-blocking
+				atomic.AddInt32(&runningTasks, -1)
+				atomic.AddInt32(&runTasksCount, 1)
+				return nil
+			})
+		}
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- Run(tasks, workersCount, maxErrorsCount)
+		}()
+
+		require.Eventually(t, func() bool {
+			return atomic.LoadInt32(&runningTasks) == int32(workersCount)
+		}, time.Second, time.Millisecond, "workers not run concurrently")
+
+		unblocking()
+
+		require.NoError(t, <-errCh)
+		require.Equal(t, int32(tasksCount), runTasksCount, "not all tasks were completed")
+	})
+
+	t.Run("errors ignored when m <= 0", func(t *testing.T) {
+		tasksCount := 50
+		tasks := make([]Task, 0, tasksCount)
+
+		var runTasksCount int32
+
+		for i := 0; i < tasksCount; i++ {
+			err := fmt.Errorf("error from task %d", i)
+			tasks = append(tasks, func() error {
+				atomic.AddInt32(&runTasksCount, 1)
+				return err
+			})
+		}
+
+		workersCount := 10
+		maxErrorsCount := 0
+		err := Run(tasks, workersCount, maxErrorsCount)
+
+		require.NoError(t, err)
+		require.Equal(t, int32(tasksCount), runTasksCount)
 	})
 }
